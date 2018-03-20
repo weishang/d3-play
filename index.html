@@ -1,21 +1,160 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>D3 Webpack Babel</title>
+  <style type="text/css">
+    body {
+      background-color: gray;
+    }
+
+    svg {
+      background-color: white;
+    }
+
+    .bar {
+      fill: purple;
+    }
+
+    .bar-label {
+      fill: white;
+      text-anchor: end;
+      font-size: 24px;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: #000000;
+    }
+  </style>
+
+  <script src="https://d3js.org/d3.v4.min.js"></script>
 </head>
+
 <body>
-  <h1>Hi</h1>
+  <script>
 
-  <svg width="300px" height="150px">
-    <rect x="20" y="20" width="20px" height="20" rx="5" ry="5" />
-    <rect x="60" y="20" width="20px" height="20" rx="5" ry="5" />
-    <rect x="100" y="20" width="20px" height="20" rx="5" ry="5"/>
-   </svg>
+    let w = 800;
+    let h = 400;
+    const margin = {
+      top: 20,
+      bottom: 20,
+      left: 80,
+      right: 20
+    }
+
+    let width = w - margin.left - margin.right;
+    let height = h - margin.top - margin.bottom;
+    // let data = [];
+
+    // for (var i = 0; i < 10; i++) {
+    //   data.push(Math.floor(Math.random() * Math.floor(100)));
+    // }
+
+    let data = [
+      {
+        "value": 38,
+        "key": "Mclean Mccarthy"
+      },
+      {
+        "value": 22,
+        "key": "Marsh Moon"
+      },
+      {
+        "value": 34,
+        "key": "Schmidt Holder"
+      },
+      {
+        "value": 37,
+        "key": "Janis Hughes"
+      },
+      {
+        "value": 38,
+        "key": "Bobbi Wilkinson"
+      },
+      {
+        "value": 35,
+        "key": "Jordan Potter"
+      }
+    ];
 
 
-   <div id="container">
-     <div id="chart"></div>
-   </div>
+    let svg = d3.select('body').append('svg').attr('height', h).attr('width', w);
+
+    let chart = svg.append('g')
+      .classed("display", true)
+      .attr("transform", 'translate(' + margin.left + ', ' + margin.top + ')');
+
+
+
+    function plot(params) {
+
+      let x = d3.scaleBand().domain(data.map(d => d.key)).range([0, width]);
+      let y = d3.scaleLinear().domain([0, d3.max(params.data, d => d.value)]).range([height, 0]);
+
+
+
+      // let x = d3.scaleLinear().domain([0, d3.max(params.data, d => d.value)]).range([0, width]);
+      // let y = d3.scaleBand().domain(data.map(d => d.key)).range([0, height]);
+
+      let linearColorScale = d3.scaleLinear().domain([0, data.length]).range(["#572500", "#F68026"]);
+      var color = d3.scaleOrdinal(d3.schemeCategory10);
+
+      let xAxis = d3.axisBottom()
+        .scale(x);
+
+      let yAxis = d3.axisLeft()
+        .scale(y);
+
+
+      var bars = this.selectAll('.bar')
+        .data(params.data)
+        .enter()
+        .append('rect')
+        .attr('class', 'bar')
+        .attr('x', (d, i) => x(d.key))
+        .attr('width', 20)
+        .attr('height', (d, i) => height - y(d.value));
+
+
+      bars.transition()
+        .duration(1000)
+        .attr('y', d => y(d.value))
+        .attr('width', d => x.bandwidth())
+        .style('fill', (d, i) => color(i))
+
+      bars.on('mouseover', (d, i) => console.log(d));
+
+
+      this.selectAll(".bar-label")
+        .data(params.data)
+        .enter().append("text")
+        .classed("bar-label", true)
+        .text((d, i) => d.key)
+        .attr('dx', -4)
+        .attr('x', d => x(d.value))
+        .attr('y', (d, i) => y(d.key))
+        .attr('dy', d => x.bandwidth() / 1.5 + 2);
+
+
+
+      this.append('g')
+        .classed('x axis', true)
+        .attr('transform', 'translate(' + 0 + ',' + height + ')')
+        .call(xAxis);
+
+      this.append('g')
+        .classed('y axis', true)
+        //.attr('transform', 'translate(' +  + ',' + height + ')')
+        .call(yAxis);
+
+    }
+
+    plot.call(chart, { data: data });
+
+  </script>
 <script type="text/javascript" src="bundle.js"></script></body>
+
 </html>

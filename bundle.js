@@ -5647,7 +5647,7 @@ eval("__webpack_require__.r(__webpack_exports__);\n/* harmony import */ var _bui
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-eval("__webpack_require__.r(__webpack_exports__);\n/* harmony import */ var d3__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! d3 */ \"./node_modules/d3/index.js\");\n\n\nconsole.log(\"working\");\n\nconst square = d3__WEBPACK_IMPORTED_MODULE_0__[\"selectAll\"](\"rect\");\nsquare.style(\"fill\", \"orange\");\n\nvar margin = { top: 20, right: 20, bottom: 30, left: 40 },\n    width = 640 - margin.left - margin.right,\n    height = 400 - margin.top - margin.bottom;\n\nvar svg = d3__WEBPACK_IMPORTED_MODULE_0__[\"select\"](\"#chart\").append(\"svg\").attr(\"height\", height + margin.left + margin.right).attr(\"width\", width + margin.top + margin.bottom);\n\nvar chart = svg.append(\"g\").attr(\"transform\", \"translate(\" + margin.left + \",\" + margin.top + \")\");\n\nvar xScale = d3__WEBPACK_IMPORTED_MODULE_0__[\"scaleLinear\"]().range([0, width]);\nvar yScale = d3__WEBPACK_IMPORTED_MODULE_0__[\"scaleLinear\"]().range([height, 0]);\n\nvar minDist = d3__WEBPACK_IMPORTED_MODULE_0__[\"min\"](hubble_data, function (nebulae) {\n    return nebulae.distance - nebulae.distance_error;\n});\n\n//# sourceURL=webpack:///./src/index.js?");
+eval("__webpack_require__.r(__webpack_exports__);\n/* harmony import */ var d3__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! d3 */ \"./node_modules/d3/index.js\");\n\n\nconsole.log(\"working\");\n\n// const square = d3.selectAll(\"rect\");\n// square.style(\"fill\", \"orange\");\n\nconsole.log(d3__WEBPACK_IMPORTED_MODULE_0__[\"version\"]);\n\n//# sourceURL=webpack:///./src/index.js?");
 
 /***/ })
 
