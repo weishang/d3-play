@@ -51,7 +51,8 @@ function generateData(numOfNodes, numOfEdges) {
       cx: Math.round(Math.random() * 400),
       cy: Math.round(Math.random() * 250),
       r: Math.ceil(Math.random() * 10),
-      id: i
+      id: i,
+      label: "172.16.197.1"
     });
   }
 
@@ -128,6 +129,8 @@ function plot(params) {
   // update()
   this.select(".x.axis")
     .attr("transform", "translate(0," + (height - padding + 5) + ")")
+    .transition()
+    .duration(2000)
     .call(d3.axisBottom(xScale));
 
   this.select(".y.axis")
@@ -170,10 +173,16 @@ function plot(params) {
     )
     .attr("transform", null)
     .select("circle")
+    .transition()
+    .duration(2000)
     .attr("cx", d => xScale(d.cx))
     .attr("cy", d => yScale(d.cy))
     .attr("r", d => d.r)
     .attr("fill", "green");
+
+  this.selectAll(".node")
+    .append("title")
+    .text(d => d.label);
 
   // add text to the group
   this.selectAll(".node")
@@ -182,10 +191,14 @@ function plot(params) {
     .attr("text-anchor", "middle")
     .attr("alignment-baseline", "hanging")
     .classed("label", true)
+    .transition()
+    .duration(2000)
     .attr("x", d => xScale(d.cx))
     .attr("y", d => yScale(d.cy + d.r / 3));
 
   this.selectAll(".edge")
+    .transition()
+    .duration(2000)
     .attr("x1", d => {
       return xScale(
         params.nodes.filter(nodeData => nodeData.id === d.nodeId1)[0].cx
