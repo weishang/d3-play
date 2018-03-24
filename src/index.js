@@ -14,7 +14,9 @@ const height = 600;
 const padding = 50;
 
 const DURATION = 1000;
+const AUTO_APPEND_INTERVAL = 1000;
 
+// add textbox to show mouse position
 let svg = d3
   .select("body")
   .append("svg")
@@ -24,9 +26,6 @@ let svg = d3
     d3.select("#position").text("Position :" + d3.event.x + ", " + d3.event.y);
   });
 
-// add textbox to show mouse position
-
-//const observations = getRandomObservations(NUM_OF_OBSERVATIONS, 0.5, true);
 
 let controls = d3
   .select("body")
@@ -40,9 +39,19 @@ controls
     plot.call(svg, generateData(NUM_OF_OBSERVATIONS, 1, true));
   });
 
+  controls
+  .append("button")
+  .attr('mode', 'auto')
+  .attr('id', 'playMode')
+  .html("Auto Mode")
+  .on("click", function(evt) {
+    switchMode();
+  });
+
 controls
   .append("button")
   .html("Add new observations")
+  .attr('id', 'append_btn')
   .on("click", function(evt) {
     plot.call(svg, appendData(svg.observations, 10, 1, true));
   });
@@ -61,10 +70,15 @@ svg.append("g").attr("id", "edges");
 svg.append("g").attr("id", "obsNodes");
 svg.append("g").attr("id", "fieldNodes");
 
+plot.call(svg, generateData(NUM_OF_OBSERVATIONS, 0.5, true));
+
+if ( d3.select('#playMode').attr('mode') === 'auto') {
+  autoAppend();
+}
+
 /**
  * appending new observation
  */
-
 function appendData(existingObservations, numOfObs, p, tryToBeBad) {
   let params = {};
   const observations = genObservations(
@@ -131,7 +145,6 @@ function appendData(existingObservations, numOfObs, p, tryToBeBad) {
 /**
  * generating data
  */
-
 function generateData(numOfObs, p, tryToBeBad) {
   let params = {};
   const observations = getRandomObservations(numOfObs, p, tryToBeBad);
@@ -191,6 +204,37 @@ function generateData(numOfObs, p, tryToBeBad) {
   return params;
 }
 
+
+/**
+ * call back to switch between auto and manual mode in appending data
+ */
+function switchMode() {
+  if (d3.select('#playMode').attr('mode') === 'auto') {
+    d3.select('#playMode').attr('mode', 'manual').html('Manual Mode');
+    d3.select('#append_btn').attr('disabled', null)
+  } else {
+    d3.select('#playMode').attr('mode', 'auto').html('Auto Mode');
+    d3.select('#append_btn').attr('disabled', true);
+    autoAppend();
+  }
+}
+
+/**
+ * recursive function that appends new data in a fix time interval 
+ */
+function autoAppend() {
+  plot.call(svg, appendData(svg.observations, 10, 1, true));
+  setTimeout(function() {
+    if (d3.select('#playMode').attr('mode') === 'auto') {
+      autoAppend();
+    }
+  }, AUTO_APPEND_INTERVAL);
+}
+
+
+/**
+ * plot the d3 graph using params 
+ */
 function plot(params) {
   // create x and y scale function
   let xScale = d3
@@ -282,7 +326,6 @@ function plot(params) {
    ****** Observation Nodes *****
    ******************************/
   // enter()
-
   let obsNodeGroups = this.select("#obsNodes")
     .selectAll(".node")
     .data(params.obsNodes, d => d.uuid)
@@ -446,22 +489,3 @@ function plot(params) {
 
   svg.observations = params.observations;
 }
-
-plot.call(svg, generateData(NUM_OF_OBSERVATIONS, 0.5, true));
-
-var i = 1; //  set your counter to 1
-
-function myLoop() {
-  //  create a loop function
-  setTimeout(function() {
-    //  call a 3s setTimeout when the loop is called
-    plot.call(svg, appendData(svg.observations, 10, 1, true));
-    i++; //  increment the counter
-    if (i < 10) {
-      //  if the counter < 10, call the loop function
-      myLoop(); //  ..  again which will trigger another
-    } //  ..  setTimeout()
-  }, 3000);
-}
-
-myLoop();
