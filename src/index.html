@@ -13,9 +13,9 @@
       background-color: white;
     }
 
-    .active {
+    .active text,
+    .active circle {
       fill: orange;
-      color: orange;
     }
 
     .axis path,
@@ -40,6 +40,16 @@
     .node {
       cursor: pointer;
     }
+
+    .node.ip circle {
+      fill: rosybrown;
+    }
+
+    .node text.hidden {
+      opacity: 0;
+    }
+
+
 
     #position {
       font-size: 20px;
