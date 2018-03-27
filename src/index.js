@@ -1,22 +1,27 @@
 import * as d3 from "d3";
-
+import Chance from "chance";
 import {
   NodeType,
   getRandomObservations,
   getFields,
-  genObservations
+  genObservations,
+  touchFields
 } from "./helper";
 
-const NUM_OF_OBSERVATIONS = 10;
+const chance = new Chance();
+
+const NUM_OF_OBSERVATIONS = 100;
+const FIELD_NODE_COUNT_THRESHOLD = 4;
+const DURATION = 1000;
+const AUTO_APPEND_INTERVAL = 1000;
 
 const width = 1000;
 const height = 600;
 const padding = 50;
 
-const DURATION = 1000;
-const AUTO_APPEND_INTERVAL = 1000;
-
-// add textbox to show mouse position
+/**********************
+ ***** page set up ****
+ **********************/
 let svg = d3
   .select("body")
   .append("svg")
@@ -26,6 +31,13 @@ let svg = d3
     d3.select("#position").text("Position :" + d3.event.x + ", " + d3.event.y);
   });
 
+// making yScale a constant
+let yScale = d3
+  .scaleLinear()
+  .domain([-1, 30])
+  .range([height - padding, padding]);
+
+drawBands(svg);
 
 let controls = d3
   .select("body")
@@ -34,15 +46,8 @@ let controls = d3
 
 controls
   .append("button")
-  .html("Generate")
-  .on("click", function() {
-    plot.call(svg, generateData(NUM_OF_OBSERVATIONS, 1, true));
-  });
-
-  controls
-  .append("button")
-  .attr('mode', 'auto')
-  .attr('id', 'playMode')
+  .attr("mode", "auto")
+  .attr("id", "playMode")
   .html("Auto Mode")
   .on("click", function(evt) {
     switchMode();
@@ -51,9 +56,9 @@ controls
 controls
   .append("button")
   .html("Add new observations")
-  .attr('id', 'append_btn')
+  .attr("id", "append_btn")
   .on("click", function(evt) {
-    plot.call(svg, appendData(svg.observations, 10, 1, true));
+    plot.call(svg, appendData(svg.observations, svg.fields, 10, 0.7, true));
   });
 
 svg
@@ -65,49 +70,95 @@ svg
 
 // placeholders for static elements
 svg.append("g").classed("x axis", true);
-svg.append("g").classed("y axis", true);
 svg.append("g").attr("id", "edges");
 svg.append("g").attr("id", "obsNodes");
 svg.append("g").attr("id", "fieldNodes");
 
-plot.call(svg, generateData(NUM_OF_OBSERVATIONS, 0.5, true));
+plot.call(svg, appendData([], [], NUM_OF_OBSERVATIONS, 1, 0.5, true));
 
-if ( d3.select('#playMode').attr('mode') === 'auto') {
+if (d3.select("#playMode").attr("mode") === "auto") {
   autoAppend();
 }
 
 /**
  * appending new observation
  */
-function appendData(existingObservations, numOfObs, p, tryToBeBad) {
+function appendData(
+  existingObservations,
+  existingFields,
+  numOfObs,
+  p,
+  tryToBeBad
+) {
   let params = {};
-  const observations = genObservations(
-    2,
+  const newObservations = genObservations(
+    numOfObs,
     { p: p, tryToBeBad: tryToBeBad },
     existingObservations
   );
+
+  const observations = existingObservations.concat(newObservations);
+  // start anew... may want to find ways to optimize this .
   const obsNodes = [];
   const fieldNodes = [];
-  const edges = []; // connects fields to their linked observation nodes
+  const edges = [];
 
   // get the fields structure from all observations
   // this should contain all the identity fields from all observations
 
-  const fields = getFields({}, observations);
+  const fields = getFields(existingFields, newObservations);
 
-  // for each unique field, create a field node
+  // for each unique field, create a field node only if the field
+  // node is shared by more than a certain number of observation
   let i = 0;
+
   for (var fieldKey in fields) {
-    fieldNodes.push({
-      type: "FIELD",
-      i: i,
-      t: fields[fieldKey].firstObservedDate,
-      cy: 20 + fields[fieldKey].angle,
-      r: 4,
-      label: fieldKey,
-      uuid: fields[fieldKey].uuid
-    });
-    i++;
+    let curField = fields[fieldKey];
+    if (curField.count > FIELD_NODE_COUNT_THRESHOLD) {
+      fieldNodes.push({
+        type: "FIELD",
+        i: i,
+        count: curField.count,
+        t: curField.lastSeen,
+        cy:
+          10 +
+          Math.pow(
+            curField.severities
+              .slice(0, 4)
+              .reduce((total, current) => (total = total + current), 0),
+            0.7
+          ) *
+            1.8,
+        r:
+          Math.pow(
+            curField.severities
+              .slice(0, 4)
+              .reduce((total, current) => (total = total + current), 0),
+            0.7
+          ) + 3,
+        label: fieldKey,
+        uuid: curField.uuid
+      });
+      i++;
+    } else if (curField.isCustom) {
+      fieldNodes.push({
+        type: "FIELD",
+        i: i,
+        count: curField.count,
+        x: curField.x,
+        y: curField.y,
+        r:
+          Math.pow(
+            curField.severities
+              .slice(0, 4)
+              .reduce((total, current) => (total = total + current), 0),
+            0.7
+          ) + 3,
+        label: fieldKey,
+        uuid: curField.uuid
+      });
+      i++;
+    }
   }
 
   // for each observation, creat an observation node
@@ -116,17 +167,20 @@ function appendData(existingObservations, numOfObs, p, tryToBeBad) {
       type: "OBS",
       t: observation.startDate,
       cy: observation.severity,
-      r: Math.sqrt(observation.severity * 20),
+      r: Math.pow(observation.severity, 0.7) + 3,
       uuid: observation.uuid
     });
 
-    // go through fields in the observation, make the edge
+    // go through fields in the observation, make the edges
     //         sourceIp
     for (var fieldKey in observation) {
       let fieldNode = fields[observation[fieldKey]];
-
-      if (fieldNode !== undefined) {
+      if (
+        fieldNode !== undefined &&
+        fieldNode.count > FIELD_NODE_COUNT_THRESHOLD
+      ) {
         edges.push({
+          uuid: observation.uuid + fieldNode.uuid,
           obsNodeUuid: observation.uuid,
           fieldNodeUuid: fieldNode.uuid
         });
@@ -135,6 +189,7 @@ function appendData(existingObservations, numOfObs, p, tryToBeBad) {
   });
 
   params.observations = observations;
+  params.fields = fields;
   params.obsNodes = obsNodes;
   params.fieldNodes = fieldNodes;
   params.edges = edges;
@@ -143,97 +198,22 @@ function appendData(existingObservations, numOfObs, p, tryToBeBad) {
 }
 
 /**
- * generating data
- */
-function generateData(numOfObs, p, tryToBeBad) {
-  let params = {};
-  const observations = getRandomObservations(numOfObs, p, tryToBeBad);
-
-  const obsNodes = [];
-  const fieldNodes = [];
-  const edges = []; // connects fields to their linked observation nodes
-
-  // get the fields structure from all observations
-  // this should contain all the identity fields from all observations
-  const fields = getFields({}, observations);
-
-  // for each unique field, create a field node
-  let i = 0;
-  for (var fieldKey in fields) {
-    fieldNodes.push({
-      type: "FIELD",
-      i: i,
-      t: fields[fieldKey].firstObservedDate,
-      cy: 20 + fields[fieldKey].angle,
-      r: 4,
-      label: fieldKey,
-      uuid: fields[fieldKey].uuid
-    });
-    i++;
-  }
-
-  // for each observation, creat an observation node
-  observations.forEach(observation => {
-    obsNodes.push({
-      type: "OBS",
-      t: observation.startDate,
-      cy: observation.severity,
-      r: Math.sqrt(observation.severity * 20),
-      uuid: observation.uuid
-    });
-
-    // go through fields in the observation, make the edge
-    //         sourceIp
-    for (var fieldKey in observation) {
-      let fieldNode = fields[observation[fieldKey]];
-
-      if (fieldNode !== undefined) {
-        edges.push({
-          obsNodeUuid: observation.uuid,
-          fieldNodeUuid: fieldNode.uuid
-        });
-      }
-    }
-  });
-
-  params.observations = observations;
-  params.obsNodes = obsNodes;
-  params.fieldNodes = fieldNodes;
-  params.edges = edges;
-
-  return params;
-}
-
-
-/**
- * call back to switch between auto and manual mode in appending data
- */
-function switchMode() {
-  if (d3.select('#playMode').attr('mode') === 'auto') {
-    d3.select('#playMode').attr('mode', 'manual').html('Manual Mode');
-    d3.select('#append_btn').attr('disabled', null)
-  } else {
-    d3.select('#playMode').attr('mode', 'auto').html('Auto Mode');
-    d3.select('#append_btn').attr('disabled', true);
-    autoAppend();
-  }
-}
-
-/**
- * recursive function that appends new data in a fix time interval 
+ * recursive function that appends new data in a fix time interval
  */
 function autoAppend() {
-  plot.call(svg, appendData(svg.observations, 10, 1, true));
+  plot.call(
+    svg,
+    appendData(svg.observations, svg.fields, NUM_OF_OBSERVATIONS, 0.5, true)
+  );
   setTimeout(function() {
-    if (d3.select('#playMode').attr('mode') === 'auto') {
+    if (d3.select("#playMode").attr("mode") === "auto") {
       autoAppend();
     }
   }, AUTO_APPEND_INTERVAL);
 }
 
-
 /**
- * plot the d3 graph using params 
+ * plot the d3 graph using params
  */
 function plot(params) {
   // create x and y scale function
@@ -247,13 +227,6 @@ function plot(params) {
     .domain(d3.extent(params.obsNodes, d => d.t))
     .range([padding, width - padding]);
 
-  let yScale = d3
-    .scaleLinear()
-    // .domain(d3.extent(params.obsNodes, d => d.cy))
-    .domain([-1, 30])
-
-    .range([height - padding, padding]);
-
   // dragging functions for the nodes
   function dragstarted(d) {
     d3
@@ -264,17 +237,23 @@ function plot(params) {
 
   function dragged(d) {
     d3.select(this).attr("transform", d => {
-      return (
-        "translate(" +
-        (d3.event.x - (d.type === "OBS" ? xTimeScale(d.t) : xScale(d.i))) +
-        ", " +
-        (d3.event.y - yScale(d.cy)) +
-        ")"
-      );
+      if (d.x === undefined) {
+        return (
+          "translate(" +
+          (d3.event.x - xTimeScale(d.t)) +
+          ", " +
+          (d3.event.y - yScale(d.cy)) +
+          ")"
+        );
+      } else {
+        return (
+          "translate(" + (d3.event.x - d.x) + ", " + (d3.event.y - d.y) + ")"
+        );
+      }
     });
 
     d3
-      .selectAll("line")
+      .selectAll("#edges line")
       .filter(lineData => {
         return d.uuid === lineData.fieldNodeUuid;
       })
@@ -282,7 +261,7 @@ function plot(params) {
       .attr("y2", d3.event.y);
 
     d3
-      .selectAll("line")
+      .selectAll("#edges line")
       .filter(lineData => {
         return d.uuid === lineData.obsNodeUuid;
       })
@@ -292,6 +271,48 @@ function plot(params) {
 
   function dragended(d) {
     d3.select(this).classed("active", false);
+  }
+
+  function appendFieldsAndRestore(d) {
+    // if obsNode is drop in a certain location
+    // we want to pull in the fields into the investigate workspace
+    // this can probably can be done via the contextmenu, but I think
+    // making it drag and drop is way cooler.
+    // throw in something into the workspace, and start investigating
+
+    // when the mouse is released, we need to append the fields that are in the
+    // observation that are not yet in the fields array
+    // once it is in the fields array, and we make the plot again, everything should
+    // just work, ,but we need to fix the location of the fields to be around the point where
+    // the mouse is released.
+
+    // oh wait, they are already parts of the fields array, but were not
+    // put into the edges array because it doesn't have enough count
+
+    // in this case, we will just mark the field as custom, so that
+    // d3 will respect the positions when it is plotted.
+
+    svg.fields = touchFields(
+      svg.fields,
+      svg.observations.filter(observation => observation.uuid === d.uuid)[0],
+      d3.event.x,
+      d3.event.y
+    );
+
+    d3
+      .select(this)
+      .classed("active", false)
+      .attr("transform", null);
+
+    d3
+      .selectAll("#edges line")
+      .filter(lineData => {
+        return d.uuid === lineData.obsNodeUuid;
+      })
+      .attr("x1", xTimeScale(d.t))
+      .attr("y1", yScale(d.cy));
+
+    plot.call(svg, appendData(svg.observations, svg.fields, 0, 0.5, true));
   }
 
   /*************************
@@ -316,9 +337,9 @@ function plot(params) {
     .duration(DURATION)
     .attr("transform", "translate(0," + (height - padding + 4) + ")");
 
-  this.select(".y.axis")
-    .attr("transform", "translate(" + (padding - 5) + ", 0 )")
-    .call(d3.axisLeft(yScale).ticks(10));
+  // this.select(".y.axis")
+  //   .attr("transform", "translate(" + (padding - 5) + ", 0 )")
+  //   .call(d3.axisLeft(yScale).ticks(10));
 
   // exit()
 
@@ -332,7 +353,19 @@ function plot(params) {
     .enter()
     .append("g")
     .classed("node", true)
-    .classed(NodeType.IP, d => d.type === NodeType.IP);
+    .classed(NodeType.IP, d => d.type === NodeType.IP)
+    .on("mouseover", d => {
+      d3
+        .select("#edges")
+        .selectAll("line")
+        .classed("show", lineData => lineData.obsNodeUuid === d.uuid);
+    })
+    .on("mouseout", d => {
+      d3
+        .select("#edges")
+        .selectAll("line.show")
+        .classed("show", lineData => lineData.obsNodeUuid !== d.uuid);
+    });
 
   // making transition for new data
   obsNodeGroups
@@ -349,6 +382,13 @@ function plot(params) {
 
   // add circle to the node
   this.selectAll("#obsNodes > .node")
+    .call(
+      d3
+        .drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", appendFieldsAndRestore)
+    )
     .on("contextmenu", function(d, i) {
       d3.event.preventDefault();
       // react on right-clicking
@@ -387,7 +427,7 @@ function plot(params) {
 
   // exit()
   this.selectAll("#obsNodes > .node")
-    .data(params.obsNodes)
+    .data(params.obsNodes, d => d.uuid)
     .exit()
     .remove();
 
@@ -398,14 +438,39 @@ function plot(params) {
 
   let fieldNodeGroups = this.select("#fieldNodes")
     .selectAll(".node")
-    .data(params.fieldNodes)
+    .data(params.fieldNodes, d => d.uuid)
     .enter()
     .append("g")
     .classed("node", true)
-    .classed(NodeType.IP, d => d.type === NodeType.IP);
+    .classed(NodeType.IP, d => d.type === NodeType.IP)
+    .on("mouseover", d => {
+      d3
+        .select("#edges")
+        .selectAll("line")
+        .classed("show", lineData => lineData.fieldNodeUuid === d.uuid);
+    })
+    .on("mouseout", d => {
+      d3
+        .select("#edges")
+        .selectAll("line.show")
+        .classed("show", lineData => lineData.fieldNodeUuid !== d.uuid);
+    });
 
-  fieldNodeGroups.append("circle");
-  fieldNodeGroups.append("text");
+  fieldNodeGroups
+    .append("circle")
+    .attr("cy", d => {
+      return height;
+    })
+    .attr("cx", d => {
+      return width;
+    })
+    .transition() // transition to bubble up from the observation nodes
+    .duration(DURATION);
+  fieldNodeGroups
+    .append("text")
+    .attr("text-anchor", "middle")
+    .attr("alignment-baseline", "hanging")
+    .attr("dy", 12);
 
   // update ()
   this.selectAll("#fieldNodes > .node")
@@ -420,19 +485,65 @@ function plot(params) {
     .select("circle")
     .transition()
     .duration(DURATION)
-    .attr("cx", d => xScale(d.i))
-    .attr("cy", d => yScale(d.cy))
+    .attr("cx", d => {
+      if (d.t) {
+        return xTimeScale(d.t);
+      } else {
+        return d.x;
+      }
+    })
+    .attr("cy", d => {
+      if (d.y) {
+        return d.y;
+      } else {
+        return yScale(d.cy);
+      }
+    })
     .attr("r", d => d.r)
     .attr("fill", "green");
 
   this.selectAll("#fieldNodes > .node")
-    .append("title")
-    .text(d => d.label);
+    .select("text")
+    .text(d => d.label)
+    .attr("x", d => {
+      if (d.t) {
+        return xTimeScale(d.t);
+      } else {
+        return d.x;
+      }
+    })
+    .attr("y", d => {
+      if (d.y) {
+        return d.y;
+      } else {
+        return yScale(d.cy);
+      }
+    })
+    .transition()
+    .duration(DURATION)
+    .attr("x", d => {
+      if (d.t) {
+        return xTimeScale(d.t);
+      } else {
+        return d.x;
+      }
+    })
+    .attr("y", d => {
+      if (d.y) {
+        return d.y;
+      } else {
+        return yScale(d.cy);
+      }
+    });
+
+  // this.selectAll("#fieldNodes > .node")
+  //   .append("title")
+  //   .text(d => d.label);
 
   // exit()
 
   this.selectAll("#fieldNodes > .node")
-    .data(params.fieldNodes)
+    .data(params.fieldNodes, d => d.uuid)
     .exit()
     .remove();
 
@@ -442,13 +553,27 @@ function plot(params) {
 
   this.select("#edges")
     .selectAll(".edge")
-    .data(params.edges)
+    .data(params.edges, d => d.uuid)
     .enter()
     .append("line")
-    .classed("edge", true);
+    .classed("edge", true)
+    .attr("x2", width - padding)
+    .attr("y2", height / 2)
+    .attr("x1", d => {
+      return xTimeScale(
+        params.obsNodes.filter(nodeData => nodeData.uuid === d.obsNodeUuid)[0].t
+      );
+    })
+    .attr("y1", d => {
+      return yScale(
+        params.obsNodes.filter(nodeData => nodeData.uuid === d.obsNodeUuid)[0]
+          .cy
+      );
+    });
+  // .transition()
+  // .duration(DURATION);
 
   // update()
-
   this.selectAll(".edge")
     .transition()
     .duration(DURATION)
@@ -464,10 +589,10 @@ function plot(params) {
       );
     })
     .attr("x2", d => {
-      return xScale(
+      return xTimeScale(
         params.fieldNodes.filter(
           nodeData => nodeData.uuid === d.fieldNodeUuid
-        )[0].i
+        )[0].t
       );
     })
     .attr("y2", d => {
@@ -481,11 +606,83 @@ function plot(params) {
   // exit(), clean up extra nodes and edges
 
   this.selectAll(".edge")
-    .data(params.edges)
+    .data(params.edges, d => d.uuid)
     .exit()
     .remove();
 
   // tuck the observations data somwhere
 
   svg.observations = params.observations;
+  svg.fields = params.fields;
+}
+
+function drawBands(svg) {
+  svg.append("g").attr("id", "severity_bands");
+
+  svg
+    .select("#severity_bands")
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", yScale(3.5))
+    .attr("width", width)
+    .attr("height", yScale(-0.25) - yScale(3.5))
+    .classed("severity severity-low", true);
+
+  svg
+    .select("#severity_bands")
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", yScale(5.5))
+    .attr("width", width)
+    .attr("height", yScale(3.5) - yScale(5.5))
+    .classed("severity severity-medium", true);
+
+  svg
+    .select("#severity_bands")
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", yScale(7.5))
+    .attr("width", width)
+    .attr("height", yScale(5.5) - yScale(7.5))
+    .classed("severity severity-high", true);
+
+  svg
+    .select("#severity_bands")
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", yScale(10.25))
+    .attr("width", width)
+    .attr("height", yScale(7.5) - yScale(10.25))
+    .classed("severity severity-critical", true);
+
+  svg
+    .select("#severity_bands")
+    .append("line")
+    .attr("x1", 0)
+    .attr("y1", yScale(10.25))
+    .attr("y2", yScale(10.25))
+    .attr("x2", width)
+    .attr("fill", "none")
+    .attr("stroke", "black")
+    .attr("stroke-width", 2);
+}
+
+/**
+ * call back to switch between auto and manual mode in appending data
+ */
+function switchMode() {
+  if (d3.select("#playMode").attr("mode") === "auto") {
+    d3
+      .select("#playMode")
+      .attr("mode", "manual")
+      .html("Manual Mode");
+    d3.select("#append_btn").attr("disabled", null);
+  } else {
+    d3
+      .select("#playMode")
+      .attr("mode", "auto")
+      .html("Auto Mode");
+    d3.select("#append_btn").attr("disabled", true);
+    autoAppend();
+  }
 }

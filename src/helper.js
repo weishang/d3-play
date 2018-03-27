@@ -68,7 +68,7 @@ function randomDate(start, end) {
 function getSeverity() {
   return chance.weighted(
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-    [50, 40, 30, 20, 10, 5, 2, 1, 0.5, 0.1, 0.01]
+    [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0.5]
   );
 }
 
@@ -171,23 +171,26 @@ export function getRandomObservations(
 }
 
 export function genObservations(numOfObservations, opts, existingObservations) {
-  const observations = existingObservations;
-  const numOfExistingObservations = observations.length;
+  const newObservations = [];
+  const numOfExistingObservations = existingObservations.length;
   let newStartDate =
-    observations.length == 0
+    numOfExistingObservations == 0
       ? new Date()
-      : observations[observations.length - 1].startDate;
-
-  console.log(newStartDate);
+      : existingObservations[numOfExistingObservations - 1].startDate;
 
   for (var i = 0; i < numOfObservations; i++) {
-    observations.push(
-      getRandomObservation(observations, opts.p, opts.tryToBeBad, newStartDate)
+    newObservations.push(
+      getRandomObservation(
+        existingObservations,
+        opts.p,
+        opts.tryToBeBad,
+        newStartDate
+      )
     );
-    newStartDate = observations[i + numOfExistingObservations].startDate;
+    newStartDate = newObservations[i].startDate;
   }
 
-  return observations;
+  return newObservations;
 }
 
 /**
@@ -195,22 +198,66 @@ export function genObservations(numOfObservations, opts, existingObservations) {
  * fields - existing fields
  */
 export function getFields(fields, observations) {
-  const newFields = Object.assign({}, fields);
+  const allFields = Object.assign({}, fields);
   const numOfFields = Object.keys(Fields).length;
   observations.forEach(observation => {
     // go through fields of the observation
     let i = 0;
     for (var fieldKey in Fields) {
       if (observation[fieldKey] !== undefined) {
-        newFields[observation[fieldKey]] = {
-          uuid: chance.guid(),
-          firstObservedDate: observation.startDate,
-          type: Fields[fieldKey].type,
-          angle: i / numOfFields
-        };
-        i++;
+        if (allFields[observation[fieldKey]] === undefined) {
+          allFields[observation[fieldKey]] = {
+            uuid: chance.guid(),
+            lastSeen: observation.startDate,
+            type: Fields[fieldKey].type,
+            angle: i / numOfFields,
+            count: 1,
+            label: observation[fieldKey],
+            severity: observation.severity,
+            severities: [observation.severity]
+          };
+          i++;
+        } else {
+          let curField = allFields[observation[fieldKey]];
+          curField.count = curField.count + 1;
+
+          curField.severity =
+            curField.severity > observation.severity
+              ? curField.severity
+              : observation.severity;
+
+          curField.severities = curField.severities
+            .concat(observation.severity)
+            .sort((a, b) => {
+              if (a < b) {
+                return 1;
+              } else if (a == b) {
+                return 0;
+              } else {
+                return -1;
+              }
+            });
+
+          curField.lastSeen = observation.startDate;
+          curField.obsUuid = observation.uuid;
+        }
       }
     }
   });
-  return newFields;
+  return allFields;
+}
+
+export function touchFields(fields, observation, x, y) {
+  const allFields = Object.assign({}, fields);
+  const numOfFields = Object.keys(Fields).length;
+  let i = 0;
+  for (var fieldKey in Fields) {
+    let curField = allFields[observation[fieldKey]];
+
+    curField.isCustom = true;
+    curField.x = x + (Math.random() - 0.5) * 100;
+    curField.y = y + (Math.random() - 0.5) * 100;
+  }
+
+  return allFields;
 }
