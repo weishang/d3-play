@@ -28,6 +28,11 @@
       fill: none;
       stroke: gray;
       stroke-width: 2px;
+      opacity: 0;
+    }
+
+    .edge.show {
+      opacity: 1
     }
 
     .axis text {
@@ -37,7 +42,16 @@
       font-weight: bold;
     }
 
-    #fieldNodes > .node {
+    #fieldNodes .node>text {
+      font-size: 8px;
+
+    }
+
+    #fieldNodes>.node {
+      cursor: pointer;
+    }
+
+    #obsNodes>.node {
       cursor: pointer;
     }
 
@@ -51,6 +65,22 @@
 
     #position {
       font-size: 20px;
+    }
+
+    #severity_bands>.severity.severity-low {
+      fill: #fdc500;
+    }
+
+    #severity_bands>.severity.severity-medium {
+      fill: #fd8c00;
+    }
+
+    #severity_bands>.severity.severity-high {
+      fill: #dc0000;
+    }
+
+    #severity_bands>.severity.severity-critical {
+      fill: #780000;
     }
   </style>
 
