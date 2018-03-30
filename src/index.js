@@ -5,13 +5,14 @@ import {
   getRandomObservations,
   getFields,
   genObservations,
-  touchFields
+  touchFields,
+  appendData
 } from "./helper";
 
 const chance = new Chance();
 
 const NUM_OF_OBSERVATIONS = 100;
-const FIELD_NODE_COUNT_THRESHOLD = 4;
+
 const DURATION = 1000;
 const AUTO_APPEND_INTERVAL = 1000;
 
@@ -46,7 +47,7 @@ let controls = d3
 
 controls
   .append("button")
-  .attr("mode", "auto")
+  .attr("mode", "manual")
   .attr("id", "playMode")
   .html("Auto Mode")
   .on("click", function(evt) {
@@ -78,123 +79,6 @@ plot.call(svg, appendData([], [], NUM_OF_OBSERVATIONS, 1, 0.5, true));
 
 if (d3.select("#playMode").attr("mode") === "auto") {
   autoAppend();
-}
-
-/**
- * appending new observation
- */
-function appendData(
-  existingObservations,
-  existingFields,
-  numOfObs,
-  p,
-  tryToBeBad
-) {
-  let params = {};
-  const newObservations = genObservations(
-    numOfObs,
-    { p: p, tryToBeBad: tryToBeBad },
-    existingObservations
-  );
-
-  const observations = existingObservations.concat(newObservations);
-  // start anew... may want to find ways to optimize this .
-  const obsNodes = [];
-  const fieldNodes = [];
-  const edges = [];
-
-  // get the fields structure from all observations
-  // this should contain all the identity fields from all observations
-
-  const fields = getFields(existingFields, newObservations);
-
-  // for each unique field, create a field node only if the field
-  // node is shared by more than a certain number of observation
-  let i = 0;
-
-  for (var fieldKey in fields) {
-    let curField = fields[fieldKey];
-    if (curField.count > FIELD_NODE_COUNT_THRESHOLD) {
-      fieldNodes.push({
-        type: "FIELD",
-        i: i,
-        count: curField.count,
-        t: curField.lastSeen,
-        cy:
-          10 +
-          Math.pow(
-            curField.severities
-              .slice(0, 4)
-              .reduce((total, current) => (total = total + current), 0),
-            0.7
-          ) *
-            1.8,
-        r:
-          Math.pow(
-            curField.severities
-              .slice(0, 4)
-              .reduce((total, current) => (total = total + current), 0),
-            0.7
-          ) + 3,
-        label: fieldKey,
-        uuid: curField.uuid
-      });
-      i++;
-    } else if (curField.isCustom) {
-      fieldNodes.push({
-        type: "FIELD",
-        i: i,
-        count: curField.count,
-        x: curField.x,
-        y: curField.y,
-        r:
-          Math.pow(
-            curField.severities
-              .slice(0, 4)
-              .reduce((total, current) => (total = total + current), 0),
-            0.7
-          ) + 3,
-        label: fieldKey,
-        uuid: curField.uuid
-      });
-      i++;
-    }
-  }
-
-  // for each observation, creat an observation node
-  observations.forEach(observation => {
-    obsNodes.push({
-      type: "OBS",
-      t: observation.startDate,
-      cy: observation.severity,
-      r: Math.pow(observation.severity, 0.7) + 3,
-      uuid: observation.uuid
-    });
-
-    // go through fields in the observation, make the edges
-    //         sourceIp
-    for (var fieldKey in observation) {
-      let fieldNode = fields[observation[fieldKey]];
-      if (
-        fieldNode !== undefined &&
-        fieldNode.count > FIELD_NODE_COUNT_THRESHOLD
-      ) {
-        edges.push({
-          uuid: observation.uuid + fieldNode.uuid,
-          obsNodeUuid: observation.uuid,
-          fieldNodeUuid: fieldNode.uuid
-        });
-      }
-    }
-  });
-
-  params.observations = observations;
-  params.fields = fields;
-  params.obsNodes = obsNodes;
-  params.fieldNodes = fieldNodes;
-  params.edges = edges;
-
-  return params;
 }
 
 /**
